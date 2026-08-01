@@ -1,0 +1,54 @@
+services:
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-cikTJfEN8S9KekyBd2gnbiipCp4CYagj}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/eventifyy
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mobile:
+    build:
+      context: .
+      target: mobile
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      EXPO_PUBLIC_SERVER_URL: ${EXPO_PUBLIC_SERVER_URL:-http://localhost:3001}
+    depends_on:
+      web:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    container_name: eventifyy-postgres-db
+    environment:
+      POSTGRES_DB: eventifyy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - eventifyy_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  eventifyy_postgres_data:

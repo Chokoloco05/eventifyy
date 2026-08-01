@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "eventifyy",
+    "slug": "eventifyy",
+    "scheme": "eventifyy",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "android": {
+      "package": "com.eventifyy.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.eventifyy.app"
+    }
+  }
+}
