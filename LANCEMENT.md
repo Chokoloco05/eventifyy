@@ -60,6 +60,29 @@ Creer `apps/native/.env` a partir de `apps/native/.env.example`, puis lancer Exp
 npm run dev:native
 ```
 
+Pour tester sur Android Studio :
+
+1. Lancer un emulateur depuis Android Studio.
+2. Lancer le web :
+
+```bash
+npm run dev:web
+```
+
+3. Dans `apps/native/.env`, utiliser :
+
+```env
+EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:3001
+```
+
+4. Relancer le mobile :
+
+```bash
+npm run dev:native
+```
+
+5. Dans le terminal Expo, appuyer sur `a`.
+
 Pour que le mobile parle au web depuis un telephone, remplacer `localhost` dans `EXPO_PUBLIC_SERVER_URL` par l'adresse IP locale de la machine.
 
 Le mobile contient maintenant :
