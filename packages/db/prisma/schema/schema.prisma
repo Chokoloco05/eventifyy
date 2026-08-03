@@ -7,3 +7,58 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum EventCategory {
+  MUSIC
+  FOOD
+  TECH
+  SPORT
+  ART
+  NIGHTLIFE
+  COMMUNITY
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+model Event {
+  id              String         @id @default(cuid())
+  title           String
+  description     String
+  category        EventCategory
+  status          EventStatus    @default(PUBLISHED)
+  startsAt        DateTime
+  endsAt          DateTime?
+  venueName       String
+  address         String
+  neighborhood    String
+  latitude        Float
+  longitude       Float
+  capacity        Int
+  priceCents      Int            @default(0)
+  coverImage      String?
+  organizerId     String
+  organizer       User           @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  registrations   Registration[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([startsAt])
+  @@index([category])
+  @@index([organizerId])
+}
+
+model Registration {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}

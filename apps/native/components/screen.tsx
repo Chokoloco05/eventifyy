@@ -1,11 +1,30 @@
 import type { ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function Screen({ children }: { children: ReactNode }) {
+type ScreenProps = {
+  children: ReactNode;
+  onRefresh?: () => Promise<void> | void;
+  refreshing?: boolean;
+};
+
+export default function Screen({ children, onRefresh, refreshing = false }: ScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              colors={["#0f766e"]}
+              onRefresh={onRefresh}
+              refreshing={refreshing}
+              tintColor="#0f766e"
+            />
+          ) : undefined
+        }
+      >
         <View style={styles.content}>{children}</View>
       </ScrollView>
     </SafeAreaView>
