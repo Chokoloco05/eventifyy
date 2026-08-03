@@ -1,6 +1,7 @@
-import { env } from "@eventifyy/env/native";
 import { createAuthClient } from "better-auth/react";
 
+import { getServerUrl } from "@/utils/server-url";
+
 export const authClient = createAuthClient({
-  baseURL: env.EXPO_PUBLIC_SERVER_URL,
+  baseURL: getServerUrl(),
 });

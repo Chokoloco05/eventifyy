@@ -10,7 +10,7 @@ services:
       NODE_ENV: development
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-cikTJfEN8S9KekyBd2gnbiipCp4CYagj}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001,http://localhost:8081,http://127.0.0.1:3001,http://127.0.0.1:8081}
       DATABASE_URL: postgresql://postgres:password@postgres:5432/eventifyy
     depends_on:
       postgres:
@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      EXPO_PUBLIC_SERVER_URL: ${EXPO_PUBLIC_SERVER_URL:-http://localhost:3001}
+      EXPO_PUBLIC_SERVER_URL: ${EXPO_PUBLIC_SERVER_URL:-http://10.0.2.2:3001}
     depends_on:
       web:
         condition: service_started
@@ -39,6 +39,7 @@ services:
       POSTGRES_DB: eventifyy
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:

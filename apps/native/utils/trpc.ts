@@ -1,8 +1,9 @@
 import type { AppRouter } from "@eventifyy/api/routers/index";
-import { env } from "@eventifyy/env/native";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
+
+import { getServerUrl } from "./server-url";
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -15,7 +16,7 @@ export const queryClient = new QueryClient({
 const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${env.EXPO_PUBLIC_SERVER_URL}/api/trpc`,
+      url: `${getServerUrl()}/api/trpc`,
       fetch(url, options) {
         return fetch(url, {
           ...options,

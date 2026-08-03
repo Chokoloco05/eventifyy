@@ -12,7 +12,7 @@ export function createAuth() {
       provider: "postgresql",
     }),
 
-    trustedOrigins: [env.CORS_ORIGIN],
+    trustedOrigins: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
     emailAndPassword: {
       enabled: true,
     },

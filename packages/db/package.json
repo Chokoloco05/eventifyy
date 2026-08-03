@@ -32,6 +32,6 @@
     "@eventifyy/config": "*",
     "@types/pg": "^8.16.0",
     "prisma": "^7.7.0",
-    "typescript": "^6"
+    "typescript": "5.9.2"
   }
 }

@@ -17,6 +17,6 @@
   "devDependencies": {
     "@eventifyy/config": "*",
     "@types/node": "^22.13.14",
-    "typescript": "^6"
+    "typescript": "5.9.2"
   }
 }

@@ -75,6 +75,8 @@ npm run dev:web
 EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:3001
 ```
 
+Cette valeur sert a Android. En Expo Web, l'app mobile remplace automatiquement l'hote par celui du navigateur, par exemple `localhost`, pour joindre l'API web.
+
 4. Relancer le mobile :
 
 ```bash
@@ -123,6 +125,13 @@ Pour arreter :
 
 ```bash
 npm run docker:down
+```
+
+Si PostgreSQL refuse de demarrer avec une erreur du type `directory "/var/lib/postgresql/data" exists but is not empty`, supprimer le volume de donnees Docker puis relancer :
+
+```bash
+docker compose down -v
+npm run docker:dev
 ```
 
 ## Commandes utiles
