@@ -15,6 +15,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "Eventifyy" }} />
+        <Stack.Screen name="community" options={{ title: "Communauté" }} />
         <Stack.Screen name="login" options={{ presentation: "modal", title: "Connexion" }} />
         <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
       </Stack>

@@ -1,7 +1,10 @@
 import { Link } from "expo-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { inferRouterOutputs } from "@trpc/server";
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { useCallback, useMemo, useState } from "react";
+
+import type { AppRouter } from "@eventifyy/api/routers/index";
 
 import { authClient } from "@/lib/auth-client";
 import NativeButton from "@/components/native-button";
@@ -27,6 +30,26 @@ const CATEGORY_COLORS: Record<string, string> = {
   NIGHTLIFE: "#e11d48",
   COMMUNITY: "#0f766e",
 };
+
+type NativeEvent = inferRouterOutputs<AppRouter>["events"][number];
+
+function updateRegistration<T extends NativeEvent>(events: T[] | undefined, eventId: string, isRegistered: boolean) {
+  return events?.map((event) => {
+    if (event.id !== eventId) {
+      return event;
+    }
+
+    const attendeeCount = Math.max(0, event.attendeeCount + (isRegistered ? 1 : -1));
+
+    return {
+      ...event,
+      attendeeCount,
+      isFull: attendeeCount >= event.capacity,
+      isRegistered,
+      canRegister: !isRegistered && attendeeCount < event.capacity && new Date(event.startsAt).getTime() >= Date.now(),
+    };
+  });
+}
 
 function formatDate(value: Date | string) {
   return new Intl.DateTimeFormat("fr-BE", {
@@ -55,39 +78,71 @@ export default function HomeScreen() {
     [category, query],
   );
 
+  const eventQueryOptions = trpc.events.queryOptions(filters);
   const healthCheck = useQuery(trpc.healthCheck.queryOptions());
   const categories = useQuery(trpc.eventCategories.queryOptions());
-  const events = useQuery(trpc.events.queryOptions(filters));
+  const events = useQuery(eventQueryOptions);
 
   const registerMutation = useMutation(
     trpc.registerForEvent.mutationOptions({
-      onSuccess: async () => {
-        Alert.alert("Réservation confirmée", "Tu es inscrit à cet événement.");
-        await events.refetch();
-        await queryClient.invalidateQueries();
+      onMutate: async ({ eventId }) => {
+        await queryClient.cancelQueries({ queryKey: eventQueryOptions.queryKey });
+        const previousEvents = queryClient.getQueryData<NativeEvent[]>(eventQueryOptions.queryKey);
+        queryClient.setQueryData<NativeEvent[]>(eventQueryOptions.queryKey, (current) =>
+          updateRegistration(current, eventId, true),
+        );
+        return { previousEvents };
       },
-      onError: (error) => Alert.alert("Réservation impossible", error.message),
+      onSuccess: () => {
+        Alert.alert("Réservation confirmée", "Tu es inscrit à cet événement.");
+      },
+      onError: (error, _variables, context) => {
+        queryClient.setQueryData(eventQueryOptions.queryKey, context?.previousEvents);
+        Alert.alert("Réservation impossible", error.message);
+      },
+      onSettled: async () => {
+        await queryClient.invalidateQueries({ queryKey: eventQueryOptions.queryKey });
+      },
     }),
   );
 
   const unregisterMutation = useMutation(
     trpc.unregisterFromEvent.mutationOptions({
-      onSuccess: async () => {
-        Alert.alert("Réservation annulée");
-        await events.refetch();
-        await queryClient.invalidateQueries();
+      onMutate: async ({ eventId }) => {
+        await queryClient.cancelQueries({ queryKey: eventQueryOptions.queryKey });
+        const previousEvents = queryClient.getQueryData<NativeEvent[]>(eventQueryOptions.queryKey);
+        queryClient.setQueryData<NativeEvent[]>(eventQueryOptions.queryKey, (current) =>
+          updateRegistration(current, eventId, false),
+        );
+        return { previousEvents };
       },
-      onError: (error) => Alert.alert("Action impossible", error.message),
+      onSuccess: () => {
+        Alert.alert("Réservation annulée");
+      },
+      onError: (error, _variables, context) => {
+        queryClient.setQueryData(eventQueryOptions.queryKey, context?.previousEvents);
+        Alert.alert("Action impossible", error.message);
+      },
+      onSettled: async () => {
+        await queryClient.invalidateQueries({ queryKey: eventQueryOptions.queryKey });
+      },
     }),
   );
 
-  const eventList = events.data ?? [];
+  const eventList = (events.data ?? []) as NativeEvent[];
   const availableSpots = eventList.reduce((sum, event) => sum + Math.max(0, event.capacity - event.attendeeCount), 0);
   const isRefreshing = healthCheck.isRefetching || categories.isRefetching || events.isRefetching;
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([healthCheck.refetch(), categories.refetch(), events.refetch()]);
   }, [categories, events, healthCheck]);
+
+  const handleShareEvent = useCallback(async (event: NativeEvent) => {
+    await Share.share({
+      title: event.title,
+      message: `${event.title}\n${formatDate(event.startsAt)}\n${event.venueName} - ${event.neighborhood}\nDécouvre cet event sur Eventifyy.`,
+    });
+  }, []);
 
   return (
     <Screen onRefresh={handleRefresh} refreshing={isRefreshing}>
@@ -120,6 +175,11 @@ export default function HomeScreen() {
       <Link href={session.data?.user ? "/dashboard" : "/login"} asChild>
         <NativeButton onPress={() => {}}>
           {session.data?.user ? "Créer / dashboard" : "Login / Sign up"}
+        </NativeButton>
+      </Link>
+      <Link href="/community" asChild>
+        <NativeButton onPress={() => {}} variant="ghost">
+          Comprendre la communauté
         </NativeButton>
       </Link>
 
@@ -155,6 +215,7 @@ export default function HomeScreen() {
       </View>
 
       {events.isLoading ? <Text style={styles.muted}>Chargement des événements...</Text> : null}
+      {events.isError ? <Text style={styles.errorText}>Impossible de charger les événements.</Text> : null}
       {!events.isLoading && eventList.length === 0 ? (
         <Text style={styles.muted}>Aucun événement publié pour ces filtres.</Text>
       ) : null}
@@ -178,24 +239,36 @@ export default function HomeScreen() {
               {event.attendeeCount}/{event.capacity} participants
             </Text>
           </View>
+          <Pressable onPress={() => handleShareEvent(event)} style={({ pressed }) => [styles.shareAction, pressed && styles.pressed]}>
+            <Text style={styles.shareActionText}>Partager</Text>
+          </Pressable>
           {session.data?.user ? (
-            <Pressable
-              disabled={registerMutation.isPending || unregisterMutation.isPending || event.isFull}
-              onPress={() =>
-                event.isRegistered
-                  ? unregisterMutation.mutate({ eventId: event.id })
-                  : registerMutation.mutate({ eventId: event.id })
-              }
-              style={({ pressed }) => [
-                styles.eventAction,
-                event.isRegistered && styles.eventActionSecondary,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.eventActionText, event.isRegistered && styles.eventActionTextSecondary]}>
-                {event.isRegistered ? "Annuler ma réservation" : event.isFull ? "Complet" : "Participer"}
-              </Text>
-            </Pressable>
+            !event.isRegistered && !event.canRegister && event.lockedReason ? (
+              <View style={styles.lockedPanel}>
+                <Text style={styles.lockedText}>{event.lockedReason}</Text>
+                <Link href="/dashboard" asChild>
+                  <NativeButton onPress={() => {}}>Débloquer mon accès</NativeButton>
+                </Link>
+              </View>
+            ) : (
+              <Pressable
+                disabled={registerMutation.isPending || unregisterMutation.isPending || event.isFull}
+                onPress={() =>
+                  event.isRegistered
+                    ? unregisterMutation.mutate({ eventId: event.id })
+                    : registerMutation.mutate({ eventId: event.id })
+                }
+                style={({ pressed }) => [
+                  styles.eventAction,
+                  event.isRegistered && styles.eventActionSecondary,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.eventActionText, event.isRegistered && styles.eventActionTextSecondary]}>
+                  {event.isRegistered ? "Annuler ma réservation" : event.isFull ? "Complet" : "Participer"}
+                </Text>
+              </Pressable>
+            )
           ) : (
             <Link href="/login" asChild>
               <NativeButton onPress={() => {}}>Se connecter pour participer</NativeButton>
@@ -351,6 +424,14 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontSize: 15,
   },
+  errorText: {
+    backgroundColor: "#fee2e2",
+    borderRadius: 10,
+    color: "#991b1b",
+    fontSize: 14,
+    fontWeight: "800",
+    padding: 12,
+  },
   eventCard: {
     backgroundColor: "#ffffff",
     borderColor: "#e2e8f0",
@@ -398,6 +479,34 @@ const styles = StyleSheet.create({
   eventMeta: {
     color: "#334155",
     fontSize: 14,
+  },
+  shareAction: {
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: "center",
+  },
+  shareActionText: {
+    color: "#0f172a",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  lockedPanel: {
+    backgroundColor: "#fffbeb",
+    borderColor: "#fde68a",
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  lockedText: {
+    color: "#78350f",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
   },
   eventAction: {
     alignItems: "center",

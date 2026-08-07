@@ -6,6 +6,7 @@ import { Input } from "@eventifyy/ui/components/input";
 import { Label } from "@eventifyy/ui/components/label";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import type { Route } from "next";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -224,6 +225,33 @@ export default function Dashboard({ session }: { session: typeof authClient.$Inf
       </section>
 
       <aside className="space-y-6">
+        <Card className="border-slate-200 shadow-sm dark:border-slate-800">
+          <CardHeader>
+            <CardTitle className="tracking-normal">Accès communauté</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {myEvents.data?.communityAccess.hasCommunityAccess ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+                <p className="font-black">Accès débloqué</p>
+                <p className="mt-1 leading-6">
+                  Tu as publié {myEvents.data.communityAccess.organizedCount} événement(s). Tu peux réserver les sorties
+                  de la communauté.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
+                <p className="font-black">Accès verrouillé</p>
+                <p className="mt-1 leading-6">
+                  Publie ton premier événement pour pouvoir participer aux sorties proposées par les autres membres.
+                </p>
+              </div>
+            )}
+            <Link className="font-black text-teal-700 hover:text-teal-900" href={"/community" as Route}>
+              Voir les règles de la communauté
+            </Link>
+          </CardContent>
+        </Card>
+
         <Card className="border-slate-200 shadow-sm dark:border-slate-800">
           <CardHeader>
             <CardTitle className="tracking-normal">Compte</CardTitle>

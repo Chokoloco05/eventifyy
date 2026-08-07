@@ -3,7 +3,6 @@
 FROM node:22-bookworm-slim AS base
 
 ENV CI=false
-ENV NODE_ENV=development
 ENV EXPO_NO_TELEMETRY=1
 ENV DATABASE_URL=postgresql://postgres:password@postgres:5432/eventifyy
 
@@ -31,10 +30,24 @@ COPY . .
 
 FROM app AS web
 
+ENV NODE_ENV=development
+
 EXPOSE 3001
-CMD ["npm", "--workspace", "web", "run", "dev", "--", "--hostname", "0.0.0.0"]
+CMD ["sh", "-c", "node packages/db/scripts/clear-sessions.mjs && npm --workspace web run dev -- --hostname 0.0.0.0"]
+
+FROM app AS web-prod
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN npm --workspace web run build
+
+EXPOSE 3001
+CMD ["sh", "-c", "DATABASE_URL=postgresql://postgres:password@postgres:5432/eventifyy npm --workspace @eventifyy/db run db:push && node packages/db/scripts/clear-sessions.mjs && npm --workspace web run start -- -H 0.0.0.0 -p 3001"]
 
 FROM app AS mobile
+
+ENV NODE_ENV=development
 
 EXPOSE 8081
 CMD ["npm", "--workspace", "native", "run", "dev"]

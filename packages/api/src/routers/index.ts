@@ -1,86 +1,25 @@
 import prisma from "@eventifyy/db";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { EVENT_CATEGORIES, eventSelect, getCommunityAccess, listPublicEvents, withEventMeta } from "../events";
 import { protectedProcedure, publicProcedure, router } from "../index";
 
-const categorySchema = z.enum([
-  "MUSIC",
-  "FOOD",
-  "TECH",
-  "SPORT",
-  "ART",
-  "NIGHTLIFE",
-  "COMMUNITY",
-]);
-
-const eventSelect = {
-  id: true,
-  title: true,
-  description: true,
-  category: true,
-  status: true,
-  startsAt: true,
-  endsAt: true,
-  venueName: true,
-  address: true,
-  neighborhood: true,
-  latitude: true,
-  longitude: true,
-  capacity: true,
-  priceCents: true,
-  coverImage: true,
-  organizerId: true,
-  createdAt: true,
-  organizer: {
-    select: {
-      id: true,
-      name: true,
-      image: true,
-    },
-  },
-  _count: {
-    select: {
-      registrations: true,
-    },
-  },
-} as const;
-
-function withEventMeta<T extends { capacity: number; startsAt: Date; _count: { registrations: number } }>(
-  event: T,
-  userId?: string,
-  registeredEventIds: Set<string> = new Set(),
-) {
-  return {
-    ...event,
-    attendeeCount: event._count.registrations,
-    isFull: event._count.registrations >= event.capacity,
-    isPast: event.startsAt.getTime() < Date.now(),
-    isRegistered: "id" in event && typeof event.id === "string" ? registeredEventIds.has(event.id) : false,
-    canRegister:
-      Boolean(userId) &&
-      "id" in event &&
-      typeof event.id === "string" &&
-      !registeredEventIds.has(event.id) &&
-      event._count.registrations < event.capacity &&
-      event.startsAt.getTime() >= Date.now(),
-  };
-}
+const categorySchema = z.enum(["MUSIC", "FOOD", "TECH", "SPORT", "ART", "NIGHTLIFE", "COMMUNITY"]);
 
 export const appRouter = router({
   healthCheck: publicProcedure.query(() => {
     return "OK";
   }),
+
   eventCategories: publicProcedure.query(() => {
-    return [
-      { value: "MUSIC", label: "Musique" },
-      { value: "FOOD", label: "Food" },
-      { value: "TECH", label: "Tech" },
-      { value: "SPORT", label: "Sport" },
-      { value: "ART", label: "Art" },
-      { value: "NIGHTLIFE", label: "Nightlife" },
-      { value: "COMMUNITY", label: "Communauté" },
-    ] as const;
+    return EVENT_CATEGORIES;
   }),
+
+  communityAccess: protectedProcedure.query(async ({ ctx }) => {
+    return getCommunityAccess(ctx.session.user.id);
+  }),
+
   events: publicProcedure
     .input(
       z
@@ -92,39 +31,10 @@ export const appRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session?.user.id;
-      const events = await prisma.event.findMany({
-        where: {
-          status: "PUBLISHED",
-          startsAt: input?.onlyUpcoming === false ? undefined : { gte: new Date() },
-          category: input?.category,
-          OR: input?.query
-            ? [
-                { title: { contains: input.query, mode: "insensitive" } },
-                { venueName: { contains: input.query, mode: "insensitive" } },
-                { neighborhood: { contains: input.query, mode: "insensitive" } },
-              ]
-            : undefined,
-        },
-        orderBy: [{ startsAt: "asc" }],
-        select: eventSelect,
-      });
-
-      const registeredEventIds = userId
-        ? new Set(
-            (
-              await prisma.registration.findMany({
-                where: { userId, eventId: { in: events.map((event) => event.id) } },
-                select: { eventId: true },
-              })
-            ).map((registration) => registration.eventId),
-          )
-        : new Set<string>();
-
-      return events.map((event) => withEventMeta(event, userId, registeredEventIds));
+      return listPublicEvents(input, ctx.session?.user.id);
     }),
+
   eventById: publicProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ ctx, input }) => {
-    const userId = ctx.session?.user.id;
     const event = await prisma.event.findUnique({
       where: { id: input.id },
       select: eventSelect,
@@ -134,19 +44,20 @@ export const appRouter = router({
       return null;
     }
 
-    const registeredEventIds = userId
-      ? new Set(
-          (
-            await prisma.registration.findMany({
-              where: { userId, eventId: input.id },
-              select: { eventId: true },
-            })
-          ).map((registration) => registration.eventId),
-        )
-      : new Set<string>();
+    const registrations = ctx.session?.user.id
+      ? await prisma.registration.findMany({
+          where: { userId: ctx.session.user.id, eventId: input.id },
+          select: { eventId: true },
+        })
+      : [];
+    const registeredEventIds = new Set(registrations.map((registration) => registration.eventId));
+    const access = ctx.session?.user.id
+      ? await getCommunityAccess(ctx.session.user.id)
+      : { organizedCount: 0, hasCommunityAccess: false };
 
-    return withEventMeta(event, userId, registeredEventIds);
+    return withEventMeta(event, ctx.session?.user.id, registeredEventIds, access.hasCommunityAccess);
   }),
+
   createEvent: protectedProcedure
     .input(
       z.object({
@@ -177,45 +88,79 @@ export const appRouter = router({
         select: eventSelect,
       });
     }),
+
   registerForEvent: protectedProcedure
     .input(z.object({ eventId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const event = await prisma.event.findUnique({
-        where: { id: input.eventId },
-        select: {
-          id: true,
-          capacity: true,
-          startsAt: true,
-          _count: { select: { registrations: true } },
-        },
-      });
+      try {
+        return await prisma.$transaction(async (tx) => {
+          const event = await tx.event.findUnique({
+            where: { id: input.eventId },
+            select: {
+              id: true,
+              organizerId: true,
+              capacity: true,
+              startsAt: true,
+              _count: { select: { registrations: true } },
+            },
+          });
 
-      if (!event) {
-        throw new Error("Event not found");
+          if (!event) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Événement introuvable" });
+          }
+
+          if (event.startsAt.getTime() < Date.now()) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Cet événement est déjà terminé" });
+          }
+
+          if (event.organizerId === ctx.session.user.id) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Tu ne peux pas réserver ton propre événement" });
+          }
+
+          const contributionCount = await tx.event.count({
+            where: {
+              organizerId: ctx.session.user.id,
+              status: "PUBLISHED",
+            },
+          });
+
+          if (contributionCount === 0) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Publie d'abord un événement pour rejoindre les sorties de la communauté.",
+            });
+          }
+
+          if (event._count.registrations >= event.capacity) {
+            throw new TRPCError({ code: "CONFLICT", message: "Cet événement est complet" });
+          }
+
+          return tx.registration.upsert({
+            where: {
+              eventId_userId: {
+                eventId: input.eventId,
+                userId: ctx.session.user.id,
+              },
+            },
+            create: {
+              eventId: input.eventId,
+              userId: ctx.session.user.id,
+            },
+            update: {},
+          });
+        });
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "L'inscription n'a pas pu être confirmée. Réessaie dans quelques secondes.",
+        });
       }
-
-      if (event.startsAt.getTime() < Date.now()) {
-        throw new Error("Event is already finished");
-      }
-
-      if (event._count.registrations >= event.capacity) {
-        throw new Error("Event is full");
-      }
-
-      return prisma.registration.upsert({
-        where: {
-          eventId_userId: {
-            eventId: input.eventId,
-            userId: ctx.session.user.id,
-          },
-        },
-        create: {
-          eventId: input.eventId,
-          userId: ctx.session.user.id,
-        },
-        update: {},
-      });
     }),
+
   unregisterFromEvent: protectedProcedure
     .input(z.object({ eventId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -228,6 +173,7 @@ export const appRouter = router({
 
       return { success: true };
     }),
+
   myEvents: protectedProcedure.query(async ({ ctx }) => {
     const [organized, registrations] = await Promise.all([
       prisma.event.findMany({
@@ -248,14 +194,21 @@ export const appRouter = router({
       }),
     ]);
 
+    const access = organized.some((event) => event.status === "PUBLISHED");
+
     return {
-      organized: organized.map((event) => withEventMeta(event, ctx.session.user.id)),
+      organized: organized.map((event) => withEventMeta(event, ctx.session.user.id, new Set(), true)),
       registrations: registrations.map((registration) => ({
         ...registration,
-        event: withEventMeta(registration.event, ctx.session.user.id, new Set([registration.event.id])),
+        event: withEventMeta(registration.event, ctx.session.user.id, new Set([registration.event.id]), access),
       })),
+      communityAccess: {
+        organizedCount: organized.filter((event) => event.status === "PUBLISHED").length,
+        hasCommunityAccess: access,
+      },
     };
   }),
+
   privateData: protectedProcedure.query(({ ctx }) => {
     return {
       message: "This is private",
@@ -263,4 +216,5 @@ export const appRouter = router({
     };
   }),
 });
+
 export type AppRouter = typeof appRouter;

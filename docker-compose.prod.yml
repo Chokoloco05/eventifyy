@@ -2,15 +2,15 @@ services:
   web:
     build:
       context: .
-      target: web
+      target: web-prod
     ports:
       - "3001:3001"
     restart: unless-stopped
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-cikTJfEN8S9KekyBd2gnbiipCp4CYagj}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001,http://localhost:8081,http://127.0.0.1:3001,http://127.0.0.1:8081}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001,http://127.0.0.1:3001,http://localhost:8081,http://127.0.0.1:8081,http://10.0.2.2:3001,http://10.0.2.2:8081}
       DATABASE_URL: postgresql://postgres:password@postgres:5432/eventifyy
     depends_on:
       postgres:
@@ -35,16 +35,16 @@ services:
 
   postgres:
     image: postgres:16
-    container_name: eventifyy-postgres-db
+    container_name: eventifyy-postgres-prod-db
     environment:
       POSTGRES_DB: eventifyy
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - eventifyy_postgres_data:/var/lib/postgresql/data
+      - eventifyy_postgres_prod_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -53,4 +53,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  eventifyy_postgres_data:
+  eventifyy_postgres_prod_data:
