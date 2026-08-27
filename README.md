@@ -1,94 +1,139 @@
-# eventifyy
+# Eventifyy
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Self, TRPC, and more.
+Eventifyy est une application de decouverte, creation et reservation d'evenements locaux a Bruxelles.
 
-## Features
+Le projet combine une application web Next.js, une application mobile Expo et des packages partages pour l'API, l'authentification, la base de donnees et l'UI. L'objectif produit est simple : permettre aux membres de trouver des sorties, publier leurs propres evenements et reserver une place dans une communaute ou chacun contribue.
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **tRPC** - End-to-end type-safe APIs
-- **Prisma** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Better-Auth
-- **Turborepo** - Optimized monorepo build system
+## Fonctionnalites
 
-## Getting Started
+- Catalogue d'evenements publics a venir.
+- Recherche par titre, lieu ou quartier.
+- Filtres par categorie : musique, food, tech, sport, art, nightlife et communaute.
+- Reservation et annulation de reservation.
+- Regle d'acces communautaire : un membre doit publier au moins un evenement avant de pouvoir reserver chez les autres.
+- Dashboard protege pour creer un evenement et suivre ses reservations.
+- Authentification avec Better Auth.
+- API type-safe avec tRPC.
+- Application mobile Expo connectee a la meme API.
+- Demarrage local ou Docker avec PostgreSQL.
 
-First, install the dependencies:
+## Stack technique
+
+- TypeScript
+- Next.js 16 et React 19 pour l'application web
+- Expo / React Native pour l'application mobile
+- tRPC et TanStack Query pour les appels API
+- Better Auth pour l'authentification
+- Prisma et PostgreSQL pour la persistance
+- Tailwind CSS et composants shadcn/ui partages
+- Turborepo et npm workspaces pour le monorepo
+- Docker Compose pour l'environnement local complet
+
+## Structure du projet
+
+```text
+eventifyy/
+|-- apps/
+|   |-- web/        # Application web Next.js
+|   `-- native/     # Application mobile Expo
+|-- packages/
+|   |-- api/        # Routeur tRPC et logique metier
+|   |-- auth/       # Configuration Better Auth
+|   |-- db/         # Prisma, schema et scripts base de donnees
+|   |-- env/        # Validation des variables d'environnement
+|   |-- ui/         # Composants UI partages
+|   `-- config/     # Configuration TypeScript partagee
+|-- docker-compose.yml
+|-- docker-compose.prod.yml
+|-- Dockerfile
+`-- LANCEMENT.md
+```
+
+## Prerequis
+
+- Node.js et npm
+- Docker, si vous utilisez la base PostgreSQL locale ou le lancement Docker
+- Un fichier `apps/web/.env` configure avec les variables serveur
+
+Variables serveur principales :
+
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/eventifyy
+BETTER_AUTH_SECRET=une-cle-secrete-de-32-caracteres-minimum
+BETTER_AUTH_URL=http://localhost:3001
+CORS_ORIGIN=http://localhost:3001,http://localhost:8081,http://127.0.0.1:3001,http://127.0.0.1:8081
+```
+
+Pour l'app mobile, configurez `apps/native/.env` a partir de `apps/native/.env.example`.
+
+## Installation locale
+
+Installer les dependances :
 
 ```bash
 npm install
 ```
 
-## Database Setup
+Demarrer PostgreSQL avec le service fourni par le package base de donnees :
 
-This project uses PostgreSQL with Prisma.
+```bash
+npm run db:start
+```
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/web/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
+Appliquer le schema Prisma :
 
 ```bash
 npm run db:push
 ```
 
-Then, run the development server:
+Lancer les applications en mode developpement :
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the fullstack application.
+L'application web est disponible sur :
 
-## UI Customization
+```text
+http://localhost:3001
+```
 
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
+## Commandes utiles
 
 ```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
+npm run dev          # Lance les workspaces en developpement
+npm run dev:web      # Lance uniquement l'application web
+npm run dev:native   # Lance Expo pour l'application mobile
+npm run dev:native:web
+npm run build        # Build tous les workspaces
+npm run check-types  # Verification TypeScript
+npm run db:push      # Applique le schema Prisma
+npm run db:migrate   # Lance les migrations Prisma
+npm run db:studio    # Ouvre Prisma Studio
+npm run db:stop      # Arrete la base locale
 ```
 
-Import shared components like this:
+## Lancement avec Docker
 
-```tsx
-import { Button } from "@eventifyy/ui/components/button";
+Demarrer l'environnement complet :
+
+```bash
+npm run docker:dev
 ```
 
-### Add app-specific blocks
+Ce mode lance :
 
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
+- PostgreSQL sur le port `5432`
+- l'application web sur `http://localhost:3001`
+- Expo sur `http://localhost:8081`
 
-## Project Structure
+Arreter les services :
 
-```
-eventifyy/
-├── apps/
-│   └── web/         # Fullstack application (Next.js)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── api/         # API layer / business logic
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
+```bash
+npm run docker:down
 ```
 
-## Available Scripts
+## Documentation complementaire
 
-- `npm run dev`: Start all applications in development mode
-- `npm run build`: Build all applications
-- `npm run dev:web`: Start only the web application
-- `npm run check-types`: Check TypeScript types across all apps
-- `npm run db:push`: Push schema changes to database
-- `npm run db:generate`: Generate database client/types
-- `npm run db:migrate`: Run database migrations
-- `npm run db:studio`: Open database studio UI
+- [LANCEMENT.md](./LANCEMENT.md) : notes de lancement local, mobile et Docker.
+- [RAPPORT_DEVELOPPEMENT.md](./RAPPORT_DEVELOPPEMENT.md) : rapport de developpement du projet.
